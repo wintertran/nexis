@@ -10,4 +10,4 @@ RUN chmod 777 /app/app.jar
 # Expose cổng mà ứng dụng Spring Boot sẽ chạy
 EXPOSE 8080
 
-ENTRYPOINT ["java","-jar","app.jar"]
+ENTRYPOINT  ["java", "-jar", "/app/app.jar"]
