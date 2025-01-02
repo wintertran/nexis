@@ -1,6 +1,5 @@
 package com.example.nexis;
 
-import com.example.nexis.config.DotenvConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
