@@ -1,5 +1,5 @@
 # Sử dụng hình ảnh JDK chính thức làm nền
-FROM openjdk:11-jdk-slim
+FROM openjdk:23-jdk-slim
 
 # Đặt thư mục làm việc trong container
 WORKDIR /app
