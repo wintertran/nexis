@@ -1,8 +1,8 @@
 # Sử dụng hình ảnh JDK chính thức làm nền
 FROM openjdk:17-jdk-slim
 
-## Đặt thư mục làm việc trong container
-#WORKDIR /app
+# Đặt thư mục làm việc trong container
+WORKDIR /app
 
 # Sao chép file JAR vào container
 COPY target/nexis-0.0.1-SNAPSHOT.jar app.jar
