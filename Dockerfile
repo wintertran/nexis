@@ -5,7 +5,7 @@ FROM openjdk:17-jdk-slim
 WORKDIR /app
 
 # Sao chép file JAR của ứng dụng vào container
-COPY target/NexisApplication.jar app.jar
+COPY target/nexis-0.0.1-SNAPSHOT.jar app.jar
 
 # Expose cổng mà ứng dụng Spring Boot sẽ chạy
 EXPOSE 8080
