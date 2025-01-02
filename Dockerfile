@@ -1,13 +1,30 @@
-# Sử dụng hình ảnh JDK chính thức làm nền
-FROM openjdk:17-jdk-slim
+# Sử dụng hình ảnh Gradle chính thức để build
+# Hình ảnh này có sẵn Gradle và JDK 17
+FROM gradle:7.4.2-jdk17 AS build
 
-# Đặt thư mục làm việc trong container
+# Đặt thư mục làm việc trong container là /app
 WORKDIR /app
 
-# Sao chép file JAR vào container
-COPY target/nexis-0.0.1-SNAPSHOT.jar app.jar
-
-# Expose cổng mà ứng dụng Spring Boot sẽ chạy
+# Mở cổng 8081 (nếu ứng dụng của bạn sử dụng cổng này, điều này không bắt buộc)
 EXPOSE 8080
 
-ENTRYPOINT ["java","-jar","/app.jar"]
+# Sao chép các file cấu hình Gradle vào container
+COPY build.gradle settings.gradle ./
+
+# Sao chép thư mục src vào container
+COPY src ./src
+
+# Chạy lệnh Gradle để build ứng dụng và bỏ qua các bài test
+RUN gradle clean build -x test
+
+# Sử dụng hình ảnh JDK chính thức để chạy ứng dụng
+FROM openjdk:17-jdk-slim
+
+# Đặt thư mục làm việc trong container là /app
+WORKDIR /app
+
+# Sao chép file jar đã build từ bước trước vào hình ảnh này
+COPY --from=build target/nexis-0.0.1-SNAPSHOT.jarr app.jar
+
+# Định nghĩa lệnh để chạy ứng dụng
+ENTRYPOINT ["java", "-jar", "app.jar"]
