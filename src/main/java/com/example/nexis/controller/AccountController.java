@@ -1,23 +1,27 @@
 package com.example.nexis.controller;
 
+import com.example.nexis.dto.CreateAccountDto;
+import com.example.nexis.dto.UpdateAccountDto;
 import com.example.nexis.entity.Account;
 import com.example.nexis.entity.User;
 import com.example.nexis.repository.AccountRepository;
 import com.example.nexis.repository.UserRepository;
-import com.example.nexis.service.EmailService;
-import com.example.nexis.service.JwtService;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/accounts")
+@RequestMapping("/api/account")
 public class AccountController {
 
     @Autowired
@@ -26,126 +30,107 @@ public class AccountController {
     @Autowired
     private UserRepository userRepository;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    @Value("${jwt.secret.key}")
+    private String secretKey;
 
-    @Autowired
-    private JwtService jwtService;
+    @Value("${jwt.refresh.secret.key}")
+    private String refreshSecretKey;
 
-    @Autowired
-    private EmailService emailService;
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    // 1. Đăng ký tài khoản
+    // Đăng ký tài khoản
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Map<String, String> request) {
-        String username = request.get("username");
-        String password = request.get("password");
-        String email = request.get("email");
-        String name = request.get("name");
-
-        if (accountRepository.findByUsername(username) != null) {
-            return ResponseEntity.badRequest().body("Username already exists");
+    public ResponseEntity<?> register(@RequestBody CreateAccountDto request) {
+        if (accountRepository.existsByUsername(request.getUsername())) {
+            return ResponseEntity.badRequest().body("Username already exists.");
         }
 
-        // Tạo User tương ứng
-        User user = new User();
-        user.setId(username); // Sử dụng username làm ID
-        user.setName(name);
-        user.setEmail(email);
+        // Tạo User mới
+        String userId = UUID.randomUUID().toString();
+        User user = new User(userId, request.getUsername(), null, null, null, null);
         userRepository.save(user);
 
-        // Tạo Account
-        Account account = new Account();
-        account.setId(username);
-        account.setUsername(username);
-        account.setPasswordHash(passwordEncoder.encode(password));
-        account.setUser(user);
+        // Tạo Account mới
+        Account account = new Account(UUID.randomUUID().toString(), user, request.getUsername(), passwordEncoder.encode(request.getPassword()), null);
         accountRepository.save(account);
 
-        return ResponseEntity.ok("Account registered successfully");
+        return ResponseEntity.ok("User registered successfully.");
     }
 
-    // 2. Đăng nhập
+    // Đăng nhập tài khoản
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> request) {
-        String username = request.get("username");
-        String password = request.get("password");
+    public ResponseEntity<?> login(@RequestBody UpdateAccountDto request) {
+        Optional<Account> optionalAccount = accountRepository.findByUsername(request.getUsername());
 
-        Account account = accountRepository.findByUsername(username);
-        if (account == null || !passwordEncoder.matches(password, account.getPasswordHash())) {
-            return ResponseEntity.badRequest().body("Invalid credentials");
+        if (optionalAccount.isEmpty()) {
+            return ResponseEntity.status(401).body("Invalid username or password.");
         }
 
-        // Tạo JWT token
-        String token = jwtService.generateToken(account);
-        Map<String, String> response = new HashMap<>();
-        response.put("token", token);
-
-        return ResponseEntity.ok(response);
-    }
-
-    // 3. Quên mật khẩu
-    @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(@RequestBody String email) {
-        Account account = accountRepository.findByUsername(email);
-        if (account == null) {
-            return ResponseEntity.badRequest().body("Email not registered");
+        Account account = optionalAccount.get();
+        if (!passwordEncoder.matches(request.getPassword(), account.getPasswordHash())) {
+            return ResponseEntity.status(401).body("Invalid username or password.");
         }
 
-        // Tạo token đặt lại mật khẩu
-        String token = UUID.randomUUID().toString();
-        account.setResetPasswordToken(token);
-        account.setTokenExpiration(new Date(System.currentTimeMillis() + 3600000)); // 1 giờ
-        accountRepository.save(account);
+        String accessToken = generateToken(account.getUser().getId(), secretKey, new Date(System.currentTimeMillis() + 3600000));
+        String refreshToken = generateToken(account.getUser().getId(), refreshSecretKey, new Date(System.currentTimeMillis() + 604800000));
 
-        // Gửi token qua email
-        emailService.sendEmail(account.getUsername(), "Reset Password",
-                "Here is your reset password token: " + token);
-
-        return ResponseEntity.ok("Reset password token has been sent to your email.");
+        return ResponseEntity.ok(new TokenResponse(accessToken, refreshToken, "Bearer", new Date(System.currentTimeMillis() + 3600000)));
     }
 
-    // 4. Đặt lại mật khẩu
+    // Reset mật khẩu
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
-        Account account = accountRepository.findByResetPasswordToken(request.getToken());
-        if (account == null) {
-            return ResponseEntity.badRequest().body("Invalid token");
+    public ResponseEntity<?> resetPassword(@RequestParam String token, @RequestBody String newPassword) {
+        Optional<Account> optionalAccount = accountRepository.findByResetToken(token);
+        if (optionalAccount.isEmpty()) {
+            return ResponseEntity.badRequest().body("Invalid or expired token.");
         }
 
-        if (account.getTokenExpiration().before(new Date())) {
-            return ResponseEntity.badRequest().body("Token has expired");
-        }
-
-        // Cập nhật mật khẩu mới
-        account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
-        account.setResetPasswordToken(null); // Xóa token sau khi sử dụng
-        account.setTokenExpiration(null);
+        Account account = optionalAccount.get();
+        account.setPasswordHash(passwordEncoder.encode(newPassword));
+        account.setResetPasswordToken(null);
         accountRepository.save(account);
 
-        return ResponseEntity.ok("Password has been reset successfully.");
-    }
-}
-
-// DTO cho Reset Password
-class ResetPasswordRequest {
-    private String token;
-    private String newPassword;
-
-    // Getters và Setters
-    public String getToken() {
-        return token;
+        return ResponseEntity.ok("Password reset successfully.");
     }
 
-    public void setToken(String token) {
-        this.token = token;
+    // Helper methods
+    private String generateToken(String userId, String key, Date expiration) {
+        SecretKey secretKey = new SecretKeySpec(key.getBytes(), SignatureAlgorithm.HS256.getJcaName());
+        return Jwts.builder()
+                .setSubject(userId)
+                .setExpiration(expiration)
+                .signWith(secretKey, SignatureAlgorithm.HS256)
+                .compact();
     }
 
-    public String getNewPassword() {
-        return newPassword;
-    }
+    private static class TokenResponse {
+        private final String accessToken;
+        private final String refreshToken;
+        private final String tokenType;
+        private final Date expiredAt;
 
-    public void setNewPassword(String newPassword) {
-        this.newPassword = newPassword;
+        public TokenResponse(String accessToken, String refreshToken, String tokenType, Date expiredAt) {
+            this.accessToken = accessToken;
+            this.refreshToken = refreshToken;
+            this.tokenType = tokenType;
+            this.expiredAt = expiredAt;
+        }
+
+        // Getters
+        public String getAccessToken() {
+            return accessToken;
+        }
+
+        public String getRefreshToken() {
+            return refreshToken;
+        }
+
+        public String getTokenType() {
+            return tokenType;
+        }
+
+        public Date getExpiredAt() {
+            return expiredAt;
+        }
     }
 }

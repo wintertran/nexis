@@ -27,6 +27,19 @@ public class User {
     @Column(name = "`DateOfBirth`")
     private Date dateOfBirth;
 
+    // Constructor không tham số
+    public User() {}
+
+    // Constructor có tham số
+    public User(String id, String name, String phoneNumber, String email, String gender, Date dateOfBirth) {
+        this.id = id;
+        this.name = name;
+        this.phoneNumber = phoneNumber;
+        this.email = email;
+        this.gender = gender;
+        this.dateOfBirth = dateOfBirth;
+    }
+
     // Getters and Setters
 
     public String getId() {

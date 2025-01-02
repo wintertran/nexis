@@ -28,6 +28,16 @@ public class Account {
     @Column(name = "`TokenExpiration`")
     private Date tokenExpiration;
 
+    public Account() {}
+
+    public Account(String id, User user, String username, String passwordHash, String resetToken) {
+        this.id = id;
+        this.user = user;
+        this.username = username;
+        this.passwordHash = passwordHash;
+        this.resetPasswordToken = resetToken;
+    }
+
     public String getId() {
         return id;
     }
