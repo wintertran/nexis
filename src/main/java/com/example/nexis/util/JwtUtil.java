@@ -23,6 +23,7 @@ public class JwtUtil {
                 .compact();
     }
 
+
     public boolean validateToken(String token, String secretKey) {
         try {
             Jwts.parserBuilder()
