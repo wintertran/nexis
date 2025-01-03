@@ -2,14 +2,13 @@ package com.example.nexis.repository;
 
 import com.example.nexis.entity.Account;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
+@Repository
 public interface AccountRepository extends JpaRepository<Account, String> {
-    // Tìm Account dựa trên ResetToken
-    Optional<Account> findByResetToken(String resetToken);
-
-    // Tìm Account dựa trên Username
     Optional<Account> findByUsername(String username);
+    Optional<Account> findByResetToken(String resetToken);
     boolean existsByUsername(String username);
 }

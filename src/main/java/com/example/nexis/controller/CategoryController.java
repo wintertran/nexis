@@ -3,67 +3,71 @@ package com.example.nexis.controller;
 import com.example.nexis.entity.Category;
 import com.example.nexis.repository.CategoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/categories")
+@RequestMapping("/api/category")
 public class CategoryController {
 
     @Autowired
     private CategoryRepository categoryRepository;
 
-    // Lấy tất cả danh mục
+    // Get all categories
     @GetMapping
-    public ResponseEntity<?> getAllCategories() {
+    public ResponseEntity<List<Category>> getAllCategories() {
         List<Category> categories = categoryRepository.findAll();
         return ResponseEntity.ok(categories);
     }
 
-    // Lấy danh mục theo ID
+    // Get a category by ID
     @GetMapping("/{id}")
     public ResponseEntity<?> getCategoryById(@PathVariable String id) {
-        Category category = categoryRepository.findById(id).orElse(null);
-        if (category == null) {
-            return ResponseEntity.badRequest().body("Category not found");
+        Optional<Category> category = categoryRepository.findById(id);
+        if (category.isPresent()) {
+            return ResponseEntity.ok(category.get());
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Category not found");
         }
-        return ResponseEntity.ok(category);
     }
 
-    // Tạo danh mục mới
+    // Create a new category
     @PostMapping
-    public ResponseEntity<?> createCategory(@RequestBody Category category) {
-        categoryRepository.save(category);
-        return ResponseEntity.ok("Category created successfully");
+    public ResponseEntity<Category> createCategory(@RequestBody Category category) {
+        Category savedCategory = categoryRepository.save(category);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedCategory);
     }
 
-    // Cập nhật danh mục
-    @PutMapping("/{id}")
+    // Update a category (partial update)
+    @PatchMapping("/{id}")
     public ResponseEntity<?> updateCategory(@PathVariable String id, @RequestBody Category updatedCategory) {
-        Category category = categoryRepository.findById(id).orElse(null);
-        if (category == null) {
-            return ResponseEntity.badRequest().body("Category not found");
+        Optional<Category> categoryOptional = categoryRepository.findById(id);
+
+        if (categoryOptional.isPresent()) {
+            Category category = categoryOptional.get();
+
+            if (updatedCategory.getName() != null) {
+                category.setName(updatedCategory.getName());
+            }
+            Category savedCategory = categoryRepository.save(category);
+            return ResponseEntity.ok(savedCategory);
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Category not found");
         }
-
-        category.setName(updatedCategory.getName());
-        category.setParentCategory(updatedCategory.getParentCategory());
-        category.setAvailable(updatedCategory.getAvailable());
-        categoryRepository.save(category);
-
-        return ResponseEntity.ok("Category updated successfully");
     }
 
-    // Xóa danh mục
+    // Delete a category
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteCategory(@PathVariable String id) {
-        Category category = categoryRepository.findById(id).orElse(null);
-        if (category == null) {
-            return ResponseEntity.badRequest().body("Category not found");
+        if (categoryRepository.existsById(id)) {
+            categoryRepository.deleteById(id);
+            return ResponseEntity.ok("Category deleted successfully");
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Category not found");
         }
-
-        categoryRepository.delete(category);
-        return ResponseEntity.ok("Category deleted successfully");
     }
 }

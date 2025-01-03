@@ -1,62 +1,96 @@
 package com.example.nexis.controller;
 
 import com.example.nexis.entity.Address;
+import com.example.nexis.entity.Province;
+import com.example.nexis.entity.Ward;
 import com.example.nexis.repository.AddressRepository;
+import com.example.nexis.repository.ProvinceRepository;
+import com.example.nexis.repository.WardRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/addresses")
+@RequestMapping("/api/address")
 public class AddressController {
 
     @Autowired
     private AddressRepository addressRepository;
 
-    // Lấy danh sách địa chỉ của người dùng
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<?> getAddressesByUser(@PathVariable String userId) {
-        List<Address> addresses = addressRepository.findByUserId(userId);
-        return ResponseEntity.ok(addresses);
+    @Autowired
+    private ProvinceRepository provinceRepository;
+
+    @Autowired
+    private WardRepository wardRepository;
+
+    // Get all provinces
+    @GetMapping("/provinces")
+    public ResponseEntity<List<Province>> getAllProvinces() {
+        return ResponseEntity.ok(provinceRepository.findAll());
     }
 
-    // Thêm địa chỉ mới
-    @PostMapping
-    public ResponseEntity<?> addAddress(@RequestBody Address address) {
-        addressRepository.save(address);
-        return ResponseEntity.ok("Address added successfully");
+    // Get districts by province ID
+    @GetMapping("/districts/{provinceId}")
+    public ResponseEntity<List<Ward>> getDistrictsByProvinceId(@PathVariable String provinceId) {
+        // Assuming districts are part of Wards (you can replace logic accordingly)
+        List<Ward> wards = wardRepository.findByDistrictId(provinceId);
+        return ResponseEntity.ok(wards);
     }
 
-    // Cập nhật địa chỉ
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateAddress(@PathVariable String id, @RequestBody Address updatedAddress) {
-        Address address = addressRepository.findById(id).orElse(null);
-        if (address == null) {
-            return ResponseEntity.badRequest().body("Address not found");
+    // Get wards by district ID
+    @GetMapping("/wards/{districtId}")
+    public ResponseEntity<List<Ward>> getWardsByDistrictId(@PathVariable String districtId) {
+        List<Ward> wards = wardRepository.findByDistrictId(districtId);
+        return ResponseEntity.ok(wards);
+    }
+
+    // Get address by ID
+    @GetMapping("/get/{addressId}")
+    public ResponseEntity<Optional<Address>> getAddressById(@PathVariable String addressId) {
+        return ResponseEntity.ok(addressRepository.findById(addressId));
+    }
+
+    // Get all addresses
+    @GetMapping("/get-all")
+    public ResponseEntity<List<Address>> getAllAddresses() {
+        return ResponseEntity.ok(addressRepository.findAll());
+    }
+
+    // Add a new address
+    @PostMapping("/add")
+    public ResponseEntity<Address> addAddress(@RequestBody Address address) {
+        return ResponseEntity.ok(addressRepository.save(address));
+    }
+
+    // Update an address
+    @PutMapping("/update/{addressId}")
+    public ResponseEntity<Address> updateAddress(@PathVariable String addressId, @RequestBody Address updatedAddress) {
+        Optional<Address> existingAddressOpt = addressRepository.findById(addressId);
+
+        if (existingAddressOpt.isPresent()) {
+            Address existingAddress = existingAddressOpt.get();
+            existingAddress.setStreetAddress(updatedAddress.getStreetAddress());
+            existingAddress.setProvinceId(updatedAddress.getProvinceId());
+            existingAddress.setDistrictId(updatedAddress.getDistrictId());
+            existingAddress.setWardId(updatedAddress.getWardId());
+            existingAddress.setDefault(updatedAddress.getDefault());
+            return ResponseEntity.ok(addressRepository.save(existingAddress));
+        } else {
+            return ResponseEntity.notFound().build();
         }
-
-        address.setStreetAddress(updatedAddress.getStreetAddress());
-        address.setProvinceId(updatedAddress.getProvinceId());
-        address.setDistrictId(updatedAddress.getDistrictId());
-        address.setWardId(updatedAddress.getWardId());
-        address.setDefault(updatedAddress.getDefault());
-        addressRepository.save(address);
-
-        return ResponseEntity.ok("Address updated successfully");
     }
 
-    // Xóa địa chỉ
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteAddress(@PathVariable String id) {
-        Address address = addressRepository.findById(id).orElse(null);
-        if (address == null) {
-            return ResponseEntity.badRequest().body("Address not found");
+    // Delete an address
+    @DeleteMapping("/delete/{addressId}")
+    public ResponseEntity<Void> deleteAddress(@PathVariable String addressId) {
+        if (addressRepository.existsById(addressId)) {
+            addressRepository.deleteById(addressId);
+            return ResponseEntity.ok().build();
+        } else {
+            return ResponseEntity.notFound().build();
         }
-
-        addressRepository.delete(address);
-        return ResponseEntity.ok("Address deleted successfully");
     }
 }
-

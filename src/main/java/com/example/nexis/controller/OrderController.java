@@ -7,60 +7,65 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/orders")
+@RequestMapping("/api/order")
 public class OrderController {
 
     @Autowired
     private OrderRepository orderRepository;
 
-    // Lấy danh sách đơn hàng của người dùng hiện tại
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<?> getOrdersByUser(@PathVariable String userId) {
-        List<Order> orders = orderRepository.findByUserId(userId);
+    // Create a new order
+    @PostMapping("/create")
+    public ResponseEntity<Order> createOrder(@RequestBody Order order) {
+        order.setId(UUID.randomUUID().toString());
+        order.setStatus(Order.Status.PENDING); // Default status
+        Order savedOrder = orderRepository.save(order);
+        return ResponseEntity.status(201).body(savedOrder);
+    }
+
+    // Get all orders
+    @GetMapping("/get-all")
+    public ResponseEntity<List<Order>> getAllOrders() {
+        List<Order> orders = orderRepository.findAll();
         return ResponseEntity.ok(orders);
     }
 
-    // Lấy thông tin chi tiết của một đơn hàng
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getOrderById(@PathVariable String id) {
-        Order order = orderRepository.findById(id).orElse(null);
-        if (order == null) {
-            return ResponseEntity.badRequest().body("Order not found");
+    // Get a specific order by ID
+    @GetMapping("/get/{orderId}")
+    public ResponseEntity<?> getOrderById(@PathVariable String orderId) {
+        Optional<Order> order = orderRepository.findById(orderId);
+        if (order.isPresent()) {
+            return ResponseEntity.ok(order.get());
+        } else {
+            return ResponseEntity.status(404).body("Order not found");
         }
-        return ResponseEntity.ok(order);
     }
 
-    // Tạo đơn hàng mới
-    @PostMapping
-    public ResponseEntity<?> createOrder(@RequestBody Order order) {
-        orderRepository.save(order);
-        return ResponseEntity.ok("Order created successfully");
+    // Delete an order by ID
+    @DeleteMapping("/delete/{orderId}")
+    public ResponseEntity<?> deleteOrder(@PathVariable String orderId) {
+        if (orderRepository.existsById(orderId)) {
+            orderRepository.deleteById(orderId);
+            return ResponseEntity.ok("Order deleted successfully");
+        } else {
+            return ResponseEntity.status(404).body("Order not found");
+        }
     }
 
-    // Cập nhật trạng thái đơn hàng
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateOrderStatus(@PathVariable String id, @RequestBody String status) {
-        Order order = orderRepository.findById(id).orElse(null);
-        if (order == null) {
-            return ResponseEntity.badRequest().body("Order not found");
+    // Update the status of an order
+    @PutMapping("/update-status/{orderId}")
+    public ResponseEntity<?> updateOrderStatus(@PathVariable String orderId, @RequestParam Order.Status status) {
+        Optional<Order> orderOptional = orderRepository.findById(orderId);
+        if (orderOptional.isPresent()) {
+            Order order = orderOptional.get();
+            order.setStatus(status);
+            orderRepository.save(order);
+            return ResponseEntity.ok(order);
+        } else {
+            return ResponseEntity.status(404).body("Order not found");
         }
-
-        order.setStatus(Order.Status.valueOf(status.toUpperCase()));
-        orderRepository.save(order);
-
-        return ResponseEntity.ok("Order status updated successfully");
-    }
-
-    // Xóa đơn hàng
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteOrder(@PathVariable String id) {
-        Order order = orderRepository.findById(id).orElse(null);
-        if (order == null) {
-            return ResponseEntity.badRequest().body("Order not found");
-        }
-        orderRepository.delete(order);
-        return ResponseEntity.ok("Order deleted successfully");
     }
 }

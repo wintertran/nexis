@@ -2,7 +2,9 @@ package com.example.nexis.servlet;
 
 import com.example.nexis.entity.Order;
 import com.example.nexis.repository.OrderRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.context.support.SpringBeanAutowiringSupport;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -12,41 +14,95 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-@WebServlet(name = "OrderServlet", urlPatterns = "/orders")
+@WebServlet(name = "OrderServlet", urlPatterns = "/api/order/*")
 public class OrderServlet extends HttpServlet {
 
     @Autowired
     private OrderRepository orderRepository;
 
-    @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String userId = request.getParameter("userId");
-        response.setContentType("application/json");
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-        if (userId != null) {
-            List<Order> orders = orderRepository.findByUserId(userId);
-            response.getWriter().write(orders.toString());
-        } else {
-            response.getWriter().write(orderRepository.findAll().toString());
-        }
+    @Override
+    public void init() throws ServletException {
+        SpringBeanAutowiringSupport.processInjectionBasedOnCurrentContext(this);
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String id = request.getParameter("id");
-        String userId = request.getParameter("userId");
-        Double totalAmount = Double.parseDouble(request.getParameter("totalAmount"));
+        if (request.getPathInfo().equals("/create")) {
+            Order order = objectMapper.readValue(request.getReader(), Order.class);
+            order.setId(UUID.randomUUID().toString());
+            order.setStatus(Order.Status.PENDING); // Default status
+            Order savedOrder = orderRepository.save(order);
 
-        Order order = new Order();
-        order.setId(id);
-        order.setTotalAmount(totalAmount);
-        // Giả sử userId được ánh xạ đúng ở đây
-        // order.setUser(...);
+            response.setContentType("application/json");
+            response.getWriter().write(objectMapper.writeValueAsString(savedOrder));
+        }
+    }
 
-        orderRepository.save(order);
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String pathInfo = request.getPathInfo();
 
-        response.setContentType("text/plain");
-        response.getWriter().write("Order created successfully");
+        if (pathInfo.equals("/get-all")) {
+            List<Order> orders = orderRepository.findAll();
+            response.setContentType("application/json");
+            response.getWriter().write(objectMapper.writeValueAsString(orders));
+        } else if (pathInfo.startsWith("/get/")) {
+            String orderId = pathInfo.substring(5);
+            Optional<Order> order = orderRepository.findById(orderId);
+
+            if (order.isPresent()) {
+                response.setContentType("application/json");
+                response.getWriter().write(objectMapper.writeValueAsString(order.get()));
+            } else {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                response.getWriter().write("{\"error\": \"Order not found\"}");
+            }
+        }
+    }
+
+    @Override
+    protected void doDelete(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String pathInfo = request.getPathInfo();
+
+        if (pathInfo.startsWith("/delete/")) {
+            String orderId = pathInfo.substring(8);
+
+            if (orderRepository.existsById(orderId)) {
+                orderRepository.deleteById(orderId);
+                response.getWriter().write("{\"message\": \"Order deleted successfully\"}");
+            } else {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                response.getWriter().write("{\"error\": \"Order not found\"}");
+            }
+        }
+    }
+
+    @Override
+    protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String pathInfo = request.getPathInfo();
+
+        if (pathInfo.startsWith("/update-status/")) {
+            String orderId = pathInfo.substring(15);
+            String status = request.getParameter("status");
+
+            Optional<Order> orderOptional = orderRepository.findById(orderId);
+
+            if (orderOptional.isPresent()) {
+                Order order = orderOptional.get();
+                order.setStatus(Order.Status.valueOf(status.toUpperCase()));
+                orderRepository.save(order);
+
+                response.setContentType("application/json");
+                response.getWriter().write(objectMapper.writeValueAsString(order));
+            } else {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                response.getWriter().write("{\"error\": \"Order not found\"}");
+            }
+        }
     }
 }

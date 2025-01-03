@@ -2,13 +2,12 @@ package com.example.nexis.repository;
 
 import com.example.nexis.entity.Cart;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+@Repository
 public interface CartRepository extends JpaRepository<Cart, String> {
-    // Lấy giỏ hàng của một User
-    List<Cart> findByUserId(String userId);
-
-    // Lấy sản phẩm trong giỏ hàng theo trạng thái
-    List<Cart> findByStatus(Cart status);
+    List<Cart> findByUserId(String userId); // Find all cart items by user ID
+    void deleteByUserId(String userId);    // Delete all cart items by user ID
 }

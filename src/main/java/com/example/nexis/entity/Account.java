@@ -18,24 +18,31 @@ public class Account {
     @Column(name = "`PasswordHash`", nullable = false)
     private String passwordHash;
 
-    @OneToOne
-    @JoinColumn(name = "`UserId`", referencedColumnName = "`Id`", nullable = false)
-    private User user;
+    @Column(name = "`UserId`")
+    private String userId;
 
     @Column(name = "`ResetToken`")
-    private String resetPasswordToken;
+    private String resetToken;
 
     @Column(name = "`TokenExpiration`")
     private Date tokenExpiration;
 
     public Account() {}
 
-    public Account(String id, User user, String username, String passwordHash, String resetToken) {
+    public Account(String id, String userId, String username, String passwordHash, String resetToken) {
         this.id = id;
-        this.user = user;
+        this.userId = userId;
         this.username = username;
         this.passwordHash = passwordHash;
-        this.resetPasswordToken = resetToken;
+        this.resetToken = resetToken;
+    }
+
+    public String getResetToken() {
+        return resetToken;
+    }
+
+    public void setResetToken(String resetToken) {
+        this.resetToken = resetToken;
     }
 
     public String getId() {
@@ -54,20 +61,12 @@ public class Account {
         this.tokenExpiration = tokenExpiration;
     }
 
-    public String getResetPasswordToken() {
-        return resetPasswordToken;
+    public String getUserId() {
+        return userId;
     }
 
-    public void setResetPasswordToken(String resetPasswordToken) {
-        this.resetPasswordToken = resetPasswordToken;
-    }
-
-    public User getUser() {
-        return user;
-    }
-
-    public void setUser(User user) {
-        this.user = user;
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     public String getPasswordHash() {

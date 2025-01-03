@@ -8,11 +8,12 @@ import java.util.Date;
 @Entity
 @Table(name = "`Orders`")
 public class Order {
-    public enum Status {
-        PENDING,
-        COMPLETED,
-        CANCELLED
-    }
+        public enum Status {
+            PENDING,
+            IN_PROGRESS,
+            COMPLETED,
+            CANCELLED
+        }
     @Id
     @Column(name = "`Id`")
     private String id;

@@ -1,22 +1,20 @@
 package com.example.nexis.controller;
 
 import com.example.nexis.dto.CreateAccountDto;
-import com.example.nexis.dto.UpdateAccountDto;
 import com.example.nexis.entity.Account;
 import com.example.nexis.entity.User;
-import com.example.nexis.repository.AccountRepository;
-import com.example.nexis.repository.UserRepository;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import com.example.nexis.service.AccountService;
+import com.example.nexis.service.UserService;
+import com.example.nexis.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,112 +23,105 @@ import java.util.UUID;
 public class AccountController {
 
     @Autowired
-    private AccountRepository accountRepository;
+    private AccountService accountService;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserService userService;
 
-    @Value("${jwt.secret.key}")
-    private String secretKey;
+    @Autowired
+    private JwtUtil jwtUtil;
 
-    @Value("${jwt.refresh.secret.key}")
-    private String refreshSecretKey;
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final String secretKey = "WinterSoldier2k3!@#SecureLongKey$%^";
 
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-
-    // Đăng ký tài khoản
+    // -------------------------------
+    // Registration Endpoint
+    // -------------------------------
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody CreateAccountDto request) {
-        if (accountRepository.existsByUsername(request.getUsername())) {
-            return ResponseEntity.badRequest().body("Username already exists.");
+        try {
+            // Debug logs
+            System.out.println("Register: Username = " + request.getUsername());
+            System.out.println("Register: Password = " + request.getPassword());
+
+            // Validate input
+            if (request.getUsername() == null || request.getUsername().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Username cannot be null or empty.");
+            }
+            if (request.getPassword() == null || request.getPassword().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Password cannot be null or empty.");
+            }
+
+            // Check if the username already exists
+            if (accountService.getAccountByUsername(request.getUsername()).isPresent()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Username already exists.");
+            }
+
+            // Create a new user entity
+            User user = new User();
+            user.setId(UUID.randomUUID().toString());
+            user.setName(request.getUsername());
+            userService.createUser(user);
+
+            // Create a new account entity
+            Account account = new Account();
+            account.setId(UUID.randomUUID().toString());
+            account.setUsername(request.getUsername());
+            account.setPasswordHash(passwordEncoder.encode(request.getPassword())); // Hash the password
+            account.setUserId(user.getId()); // Link the account to the user
+            accountService.createAccount(account);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body("User registered successfully.");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("An error occurred: " + e.getMessage());
         }
-
-        // Tạo User mới
-        String userId = UUID.randomUUID().toString();
-        User user = new User(userId, request.getUsername(), null, null, null, null);
-        userRepository.save(user);
-
-        // Tạo Account mới
-        Account account = new Account(UUID.randomUUID().toString(), user, request.getUsername(), passwordEncoder.encode(request.getPassword()), null);
-        accountRepository.save(account);
-
-        return ResponseEntity.ok("User registered successfully.");
     }
 
-    // Đăng nhập tài khoản
+    // -------------------------------
+    // Login Endpoint
+    // -------------------------------
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody UpdateAccountDto request) {
-        Optional<Account> optionalAccount = accountRepository.findByUsername(request.getUsername());
+    public ResponseEntity<?> login(@RequestBody CreateAccountDto request) {
+        try {
+            // Debug logs
+            System.out.println("Login: Username = " + request.getUsername());
+            System.out.println("Login: Password = " + request.getPassword());
 
-        if (optionalAccount.isEmpty()) {
-            return ResponseEntity.status(401).body("Invalid username or password.");
-        }
+            // Validate input
+            if (request.getUsername() == null || request.getUsername().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Username cannot be null or empty.");
+            }
+            if (request.getPassword() == null || request.getPassword().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Password cannot be null or empty.");
+            }
 
-        Account account = optionalAccount.get();
-        if (!passwordEncoder.matches(request.getPassword(), account.getPasswordHash())) {
-            return ResponseEntity.status(401).body("Invalid username or password.");
-        }
+            // Find the account by username
+            Optional<Account> accountOptional = accountService.getAccountByUsername(request.getUsername());
+            if (accountOptional.isPresent()) {
+                Account account = accountOptional.get();
 
-        String accessToken = generateToken(account.getUser().getId(), secretKey, new Date(System.currentTimeMillis() + 3600000));
-        String refreshToken = generateToken(account.getUser().getId(), refreshSecretKey, new Date(System.currentTimeMillis() + 604800000));
+                // Check if the password matches
+                if (passwordEncoder.matches(request.getPassword(), account.getPasswordHash())) {
+                    // Generate JWT token
+                    String token = jwtUtil.generateToken(account.getUserId(), secretKey, 3600000); // 1 hour
 
-        return ResponseEntity.ok(new TokenResponse(accessToken, refreshToken, "Bearer", new Date(System.currentTimeMillis() + 3600000)));
-    }
+                    // Return token response
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("AccessToken", token);
+                    response.put("TokenType", "Bearer");
+                    response.put("ExpiresAt", System.currentTimeMillis() + 3600000);
 
-    // Reset mật khẩu
-    @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@RequestParam String token, @RequestBody String newPassword) {
-        Optional<Account> optionalAccount = accountRepository.findByResetToken(token);
-        if (optionalAccount.isEmpty()) {
-            return ResponseEntity.badRequest().body("Invalid or expired token.");
-        }
-
-        Account account = optionalAccount.get();
-        account.setPasswordHash(passwordEncoder.encode(newPassword));
-        account.setResetPasswordToken(null);
-        accountRepository.save(account);
-
-        return ResponseEntity.ok("Password reset successfully.");
-    }
-
-    // Helper methods
-    private String generateToken(String userId, String key, Date expiration) {
-        SecretKey secretKey = new SecretKeySpec(key.getBytes(), SignatureAlgorithm.HS256.getJcaName());
-        return Jwts.builder()
-                .setSubject(userId)
-                .setExpiration(expiration)
-                .signWith(secretKey, SignatureAlgorithm.HS256)
-                .compact();
-    }
-
-    private static class TokenResponse {
-        private final String accessToken;
-        private final String refreshToken;
-        private final String tokenType;
-        private final Date expiredAt;
-
-        public TokenResponse(String accessToken, String refreshToken, String tokenType, Date expiredAt) {
-            this.accessToken = accessToken;
-            this.refreshToken = refreshToken;
-            this.tokenType = tokenType;
-            this.expiredAt = expiredAt;
-        }
-
-        // Getters
-        public String getAccessToken() {
-            return accessToken;
-        }
-
-        public String getRefreshToken() {
-            return refreshToken;
-        }
-
-        public String getTokenType() {
-            return tokenType;
-        }
-
-        public Date getExpiredAt() {
-            return expiredAt;
+                    return ResponseEntity.ok(response);
+                } else {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials.");
+                }
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials.");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("An error occurred: " + e.getMessage());
         }
     }
 }

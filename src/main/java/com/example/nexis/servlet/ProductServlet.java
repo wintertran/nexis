@@ -2,7 +2,10 @@ package com.example.nexis.servlet;
 
 import com.example.nexis.entity.Product;
 import com.example.nexis.repository.ProductRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.web.context.support.SpringBeanAutowiringSupport;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -11,45 +14,49 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 
-@WebServlet(name = "ProductServlet", urlPatterns = "/products")
+@WebServlet(name = "ProductServlet", urlPatterns = "/api/Product/*")
 public class ProductServlet extends HttpServlet {
 
     @Autowired
     private ProductRepository productRepository;
 
-    @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String id = request.getParameter("id");
-        response.setContentType("application/json");
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-        if (id != null) {
-            Optional<Product> product = productRepository.findById(id);
-            if (product.isPresent()) {
-                response.getWriter().write(product.get().toString());
-            } else {
-                response.getWriter().write("{\"error\":\"Product not found\"}");
-            }
-        } else {
-            response.getWriter().write(productRepository.findAll().toString());
-        }
+    @Override
+    public void init() throws ServletException {
+        SpringBeanAutowiringSupport.processInjectionBasedOnCurrentContext(this);
     }
 
     @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String id = request.getParameter("id");
-        String name = request.getParameter("name");
-        Double price = Double.parseDouble(request.getParameter("price"));
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String pathInfo = request.getPathInfo();
 
-        Product product = new Product();
-        product.setId(id);
-        product.setName(name);
-        product.setPrice(price);
-
-        productRepository.save(product);
-
-        response.setContentType("text/plain");
-        response.getWriter().write("Product created successfully");
+        if (pathInfo == null || pathInfo.equals("/getProductByPaging")) {
+            int page = Integer.parseInt(request.getParameter("page"));
+            int size = Integer.parseInt(request.getParameter("size"));
+            List<Product> products = productRepository.findAll(PageRequest.of(page, size)).getContent();
+            response.setContentType("application/json");
+            response.getWriter().write(objectMapper.writeValueAsString(products));
+        } else if (pathInfo.startsWith("/search")) {
+            String keyword = request.getParameter("keyword");
+            List<Product> products = productRepository.findByNameContainingOrDescriptionContaining(keyword, keyword);
+            response.setContentType("application/json");
+            response.getWriter().write(objectMapper.writeValueAsString(products));
+        } else if (pathInfo.startsWith("/")) {
+            String id = pathInfo.substring(1);
+            Optional<Product> product = productRepository.findById(id);
+            if (product.isPresent()) {
+                response.setContentType("application/json");
+                response.getWriter().write(objectMapper.writeValueAsString(product.get()));
+            } else {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                response.getWriter().write("{\"error\": \"Product not found\"}");
+            }
+        } else {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        }
     }
 }

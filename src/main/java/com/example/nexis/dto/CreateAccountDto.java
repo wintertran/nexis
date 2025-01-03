@@ -4,7 +4,7 @@ public class CreateAccountDto {
     private String username;
     private String password;
 
-    // Getters and Setters
+    // Getters and setters
     public String getUsername() {
         return username;
     }

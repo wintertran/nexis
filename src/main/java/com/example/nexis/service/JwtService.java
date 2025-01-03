@@ -13,7 +13,7 @@ import java.util.Map;
 @Service
 public class JwtService {
 
-    private static final String SECRET_KEY = "your_secret_key";
+    private static final String SECRET_KEY = "WinterSoldier2k3!@#SecureLongKey$%^";
     private static final long EXPIRATION_TIME = 86400000; // 1 ngày
     public String extractUsername(HttpServletRequest request) {
         String authorizationHeader = request.getHeader("Authorization");
